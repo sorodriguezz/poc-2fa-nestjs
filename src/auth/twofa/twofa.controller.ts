@@ -4,6 +4,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +13,8 @@ import { TwoFaService } from './twofa.service';
 import { UsersService } from '../../users/users.service';
 import type { Request } from 'express';
 import { randomBytes } from 'crypto';
+import { AuthGuard } from '@nestjs/passport';
+import { MfaGuard } from '../guards/mfa.guard';
 
 class InitiateDto {
   issuer!: string;
@@ -26,6 +29,11 @@ class VerifyDto {
   code?: string;
   recoveryCode?: string;
 } // admite recovery opcional
+
+class RotateInitiateDto {
+  issuer!: string;
+  accountLabel!: string;
+}
 
 class RotateConfirmDto {
   code!: string;
@@ -74,21 +82,31 @@ export class TwoFaController {
     return this.twofa.enable(user.sub, dto.code);
   }
 
+  @Post('rotate/initiate')
+  @UseGuards(AuthGuard('jwt'), MfaGuard)
+  async initiateRotate(@Req() req: any, @Body() dto: RotateInitiateDto) {
+    return this.twofa.initiate(
+      req.user.sub as string,
+      dto.issuer,
+      dto.accountLabel,
+    );
+  }
+
   @Post('rotate/confirm')
-  async confirm(@Req() req: Request, @Body() dto: RotateConfirmDto) {
-    const user = await this.validateTempToken(req);
-    return this.twofa.enable(user.sub, dto.code); // activa nuevo (el viejo queda fuera)
+  @UseGuards(AuthGuard('jwt'), MfaGuard)
+  async confirmRotate(@Req() req: any, @Body() dto: RotateConfirmDto) {
+    return this.twofa.enable(req.user.sub as string, dto.code); // activa nuevo (el viejo queda fuera)
   }
 
   @Post('recovery/regenerate')
-  async regenerate(@Req() req: Request) {
-    const user = await this.validateTempToken(req);
-
+  @UseGuards(AuthGuard('jwt'), MfaGuard)
+  async regenerate(@Req() req: any) {
     const codes = Array.from(
       { length: 10 },
       () => randomBytes(5).toString('hex'), // 10 chars hex
     );
-    await this.users.replaceUserRecoveryCodes(user.sub, codes);
+
+    await this.users.replaceUserRecoveryCodes(req.user.sub as string, codes);
     return { codes }; // Mostrar SOLO aquí. No se vuelven a exponer.
   }
 

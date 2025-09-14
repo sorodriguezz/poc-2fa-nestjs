@@ -80,6 +80,7 @@ export class UsersService {
         }),
       ),
     );
+
     await this.recoveryCodeRepository.save(newRecoveryCodeRows);
   }
 

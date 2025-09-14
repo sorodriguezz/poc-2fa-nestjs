@@ -17,6 +17,20 @@ export class AuthController {
       credentials.password,
     );
 
+    if (!user.isTwoFactorEnabled) {
+      // Si no requiere MFA, entregar el JWT de acceso principal directamente
+      const accessToken = this.authService.issueMfaAccessToken({
+        id: user.id,
+        email: user.email,
+      });
+
+      return {
+        access_token: accessToken,
+        requiresMfa: false,
+      };
+    }
+
+    // Si requiere MFA, entregar el token temporal
     const temporaryToken = this.authService.issueTemporaryToken({
       id: user.id,
       email: user.email,
@@ -25,7 +39,7 @@ export class AuthController {
 
     return {
       access_token: temporaryToken,
-      requiresMfa: !!user.isTwoFactorEnabled,
+      requiresMfa: true,
     };
   }
 }
